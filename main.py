@@ -1,38 +1,39 @@
 import asyncio
 import asyncpg
-import time
-from urllib.parse import urlparse
+import ssl
 
-DATABASE_URL = "postgresql://postgres:TermuxAuth01@db.ietmxcmutwkmlvsgquhm.supabase.co:5432/postgres"
+USER = "postgres.ietmxcmutwkmlvsgquhm"
+PASSWORD = "TermuxAuth01"  # replace with your real password
+HOST = "aws-0-ap-south-1.pooler.supabase.com"
+PORT = 5432
+DBNAME = "postgres"
 
-async def measure_latency():
-    result = urlparse(DATABASE_URL)
-    conn = await asyncpg.connect(
-        user=result.username,
-        password=result.password,
-        database=result.path.lstrip('/'),
-        host=result.hostname,
-        port=result.port,
-        ssl='require'
-    )
+async def connect():
+    try:
+        # Create an SSL context that ignores cert verification
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
 
-    print("🔌 Connected, testing latency for 10 seconds...")
+        conn = await asyncpg.connect(
+            user=USER,
+            password=PASSWORD,
+            host=HOST,
+            port=PORT,
+            database=DBNAME,
+            ssl=ssl_context
+        )
 
-    latencies = []
-    start_time = time.time()
+        print("✅ Connected successfully!")
 
-    while time.time() - start_time < 10:
-        t0 = time.perf_counter()
-        await conn.execute("SELECT 1")
-        t1 = time.perf_counter()
-        latency_ms = (t1 - t0) * 1000
-        latencies.append(latency_ms)
-        await asyncio.sleep(0.2)  # space out queries slightly
+        result = await conn.fetchrow("SELECT NOW();")
+        print("🕒 Current Time:", result["now"])
 
-    await conn.close()
+        await conn.close()
+        print("🔌 Connection closed.")
 
-    avg_latency = sum(latencies) / len(latencies)
-    print(f"\n✅ Average latency: {avg_latency:.2f} ms over {len(latencies)} queries.")
+    except Exception as e:
+        print(f"❌ Failed to connect: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(measure_latency())
+    asyncio.run(connect())
